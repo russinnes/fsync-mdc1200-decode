@@ -14,8 +14,8 @@ The following packages need to be installed prior to use:
 	libpulse-dev
 
 
-Run the ./build.sh initially, as it will create a ./demod executable built for your machine architecture
-The included demod executable ib built on X86_32.
+Run the ./build.sh initially, as it will create a ./demod executable built for your machine architecture.
+The included demod executable is built on X86_32.
 
 
 
