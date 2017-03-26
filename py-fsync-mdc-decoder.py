@@ -165,7 +165,7 @@ _Decoder.start()
 def process(input):
     if "FLEETSYNC" in input:
         msg = input.split('|')[1]
-        type = input.split('|')[0].split()[0]
+        msgtype = input.split('|')[0].split()[0]
         cmd = int(input.split('|')[0].split()[1])
         subcmd = int(input.split('|')[0].split()[2])
         from_flt = int(input.split('|')[0].split()[3])
