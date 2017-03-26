@@ -3,11 +3,12 @@
 Linux software-based decoder for Fleetsync 1/2 and MDC1200 radio data signalling formats
 
 A python-based front end provides interfacing to the decoder, however the decoder can be run on its own.
-Instructions on usage are commented in the python script
+Instructions on usage are commented in the python script.
 This software supports both system audio (soundcard input) and RTL-SDR usb sources.
 A raw output of UDP packets to localhost also provides an avenue for further scripting.
 
 The following packages need to be installed prior to use:
+	
 	rtl-sdr
 	sox
 	libpulse-dev
