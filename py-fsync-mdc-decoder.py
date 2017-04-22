@@ -161,7 +161,7 @@ _Decoder = _run_decoder()
 _Decoder.start()
 
 #----------------------------------------------------------------------------------------#
-# FLEETSYNC: 66 252 201 1000 121 1601 1 |testing some more| 17 |?Cf| 30 0 0
+
 def process(input):
     if "FLEETSYNC" in input:
         msg = input.split('|')[1]
