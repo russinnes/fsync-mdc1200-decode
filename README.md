@@ -17,6 +17,6 @@ The following packages need to be installed prior to use:
 Run the ./build.sh initially, as it will create a ./demod executable built for your machine architecture.
 The included demod executable is built on X86_32.
 
-
+Not yet working on ARM based processors (buffer overruns) ie : RPi, BPi, etc. 
 
 This software contains libraries from Matthew Kaufman (atmatthewat) and pieces of multimon-ng (EliasOenal, Thomas Sailer)
