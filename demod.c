@@ -12,306 +12,238 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <unistd.h>
-#include "fsync_decode.h" /* and link with mdc_decode.c */ 
+
+// Network
+#include <sys/socket.h> 
+#include <arpa/inet.h> 
+#include <netinet/in.h> 
+
+// and link the following with mdc_decode.c on compile!
+#include "fsync_decode.h" 
 #include "mdc_decode.h"
 
-static int integer_only = true;
+#define UDPPORT 9101
 
-void fsyncCallBack(int cmd, int subcmd, int from_fleet, int from_unit, int to_fleet, int to_unit, int allflag, \
-                   unsigned char *payload, int payload_len, unsigned char *raw_msg, int raw_msg_len, \
-                   void *context, int is_fsync2, int is_2400)
-    {
-        fprintf(stderr,"FLEETSYNC: ");
-        fprintf(stderr,"%d ", cmd);
-        fprintf(stderr,"%d ", subcmd);
-        fprintf(stderr,"%d ", from_fleet);
-        fprintf(stderr,"%d ", from_unit);
-        fprintf(stderr,"%d ", to_fleet);
-        fprintf(stderr,"%d ", to_unit);
-        fprintf(stderr,"%d ", allflag);
-        fprintf(stderr,"|%.*s| ", payload_len, payload);
-        fprintf(stderr,"%d ", payload_len);
-        fprintf(stderr,"%.*s ", raw_msg_len, raw_msg);
-        fprintf(stderr,"%d ", raw_msg_len);
-        fprintf(stderr,"%d ", is_fsync2);
-        fprintf(stderr,"%d ", is_2400);
-        fprintf(stderr,"\n");
-    }
+
+void sendJsonUDP(char *message) {
+
+    int sockfd; 
+    struct sockaddr_in servaddr; 
+    if ( (sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0 ) { 
+        fprintf(stderr, "Socket creation error\n"); 
+        return; 
+    } 
+    memset(&servaddr, 0, sizeof(servaddr)); 
+    servaddr.sin_family = AF_INET; 
+    servaddr.sin_port = htons(UDPPORT); 
+    servaddr.sin_addr.s_addr = INADDR_ANY; 
+    int n, len; 
+    sendto(sockfd, message, strlen(message), MSG_CONFIRM, (const struct sockaddr *) &servaddr, sizeof(servaddr)); 
+    close(sockfd); 
+    return;
+
+}
+
+
+
+
+void fsyncCallBack(int cmd, int subcmd, int from_fleet, int from_unit, int to_fleet, \
+                    int to_unit, int allflag, unsigned char *payload, int payload_len, \
+                    unsigned char *raw_msg, int raw_msg_len, \
+                    void *context, int is_fsync2, int is_2400){
+    char json_buffer[2048];
+    snprintf(json_buffer, sizeof(json_buffer), "{\"type\":\"FLEETSYNC\","\
+                                         "\"cmd\":\"%d\","\
+                                         "\"subcmd\":\"%d\","\
+                                         "\"from_fleet\":\"%d\","\
+                                         "\"from_unit\":\"%d\","\
+                                         "\"to_fleet\":\"%d\","\
+                                         "\"to_unit\":\"%d\","\
+                                         "\"all_flag\":\"%d\","\
+                                         "\"payload\":\"%.*s\","\
+                                         "\"fsync2\":\"%d\","\
+                                         "\"2400\":\"%d\"}", cmd,subcmd,from_fleet,from_unit, \
+                                                            to_fleet, to_unit, allflag, \
+                                                            payload_len, payload, \
+                                                            is_fsync2, is_2400) ;
+    fprintf(stdout, "%s\n", json_buffer);
+    sendJsonUDP(json_buffer);
+}
+
+void mdcCallBack(int numFrames, unsigned char op, unsigned char arg, unsigned short unitID,\
+                  unsigned char extra0, unsigned char extra1, unsigned char extra2, \
+                  unsigned char extra3, void *context){
+    char json_buffer[2048];
+    snprintf(json_buffer, sizeof(json_buffer), "{\"type\":\"MDC1200\","\
+                                         "\"op\":\"%02x\","\
+                                         "\"arg\":\"%02x\","\
+                                         "\"unitID\":\"%04x\","\
+                                         "\"ex0\":\"%02x\","\
+                                         "\"ex1\":\"%02x\","\
+                                         "\"ex2\":\"%02x\","\
+                                         "\"ex3\":\"%02x\"}", op, arg, unitID,extra0, \
+                                         extra1, extra2, extra3);
+                                         
+    fprintf(stdout, "%s\n", json_buffer);
+    sendJsonUDP(json_buffer);
+}
+
+
+static void read_input(int inputflag) {
+
+    // General
+    int sample_rate = 8000;
+    unsigned char buffer[2048];
+    float fbuf[8192];
+    unsigned int fbuf_cnt = 0;
+    int i;
+    int error;
+    int overlap = 0;
+    static int integer_only = true;
+    int fd = 0;
+    unsigned char *sp;
+    pa_simple *s;
+    pa_sample_spec ss;
     
-static void input_sound(unsigned int sample_rate, unsigned int overlap, int decode_type)
-{
-    // FSYNC STUFF
-    fprintf(stderr, "\nInput Type: System Audio Input\n");
+    // Fleetsync
     fsync_decoder_t *f_decoder; 
-    int result; 
     f_decoder = fsync_decoder_new(sample_rate); 
     fsync_decoder_set_callback(f_decoder, fsyncCallBack, 0);
-    // MDC1200 STUFF
+    int f_result; 
+    
+    // MDC1200 
     mdc_decoder_t *m_decoder; 
     unsigned char op, arg, extra0, extra1, extra2, extra3; 
     unsigned short unitID;
     m_decoder = mdc_decoder_new(sample_rate);  
-    //
-    short buffer[8192];
-    float fbuf[16384];
-    unsigned int fbuf_cnt = 0;
-    int i;
-    int error;
-    short *sp;
-    pa_simple *s;
-    pa_sample_spec ss;
-    ss.format = PA_SAMPLE_S16NE;
-    ss.channels = 1;
-    ss.rate = sample_rate;
-    /* Create the recording stream */
-    if (!(s = pa_simple_new(NULL, "Fleetsync/MDC1200 Decoder", PA_STREAM_RECORD, NULL, "record", &ss, NULL, NULL, &error))) {
-        fprintf(stderr, __FILE__": pa_simple_new() failed: %s\n", pa_strerror(error));
-        exit(4);
-    }
-    switch(decode_type){
-      case 0: // Fleetsync
-        {     
-        fprintf(stderr, "Decoder: Fleetsync\n");
-        for (;;) {
-            i = pa_simple_read(s, sp = buffer, sizeof(buffer), &error);
-            if (i < 0 && errno != EAGAIN) {
-                perror("read");
-                fprintf(stderr, "error 1\n");
-                exit(4);
-            }
-            i=sizeof(buffer);
-            if (!i)
-                break;
-            if (i > 0) {
-                if(integer_only)
-            {
-                    fbuf_cnt = i/sizeof(buffer[0]);
-            }
-                else
-                {
-                    for (; (unsigned int) i >= sizeof(buffer[0]); i -= sizeof(buffer[0]), sp++)
-                        fbuf[fbuf_cnt++] = (*sp) * (1.0/32768.0);
-                    if (i)
-                        fprintf(stderr, "warning: noninteger number of samples read\n");
-                }
-                if (fbuf_cnt > overlap) 
-                    {
-                    result = fsync_decoder_process_samples(f_decoder, buffer, sizeof(buffer));
-                    memmove(fbuf, fbuf+fbuf_cnt-overlap, overlap*sizeof(fbuf[0]));
-                    fbuf_cnt = overlap;
-                    switch(result) 
-                        { 
-                        case 0: break; 
-                        case -1: exit(1); 
-                        } 
-                    }
-                }
+    mdc_decoder_set_callback(m_decoder, mdcCallBack, 0);
+    int m_result; 
+
+    
+    // Pulse init if not reading raw input
+    if (inputflag == 0)
+        {
+        ss.format = PA_SAMPLE_U8;
+        ss.channels = 1;
+        ss.rate = sample_rate;
+    // Try to create the recording stream 
+        if (!(s = pa_simple_new(NULL, "Fleetsync/MDC1200 Decoder", PA_STREAM_RECORD, NULL, "record", &ss, NULL, NULL, &error))) {
+            fprintf(stderr, __FILE__": Pulseaudio Init Failed: %s\n", pa_strerror(error));
+            exit(4);
             }
         }
-      case 1: // MDC1200
-        { 
-        fprintf(stderr, "Decoder: MDC1200\n");    
-        for (;;) {
-            i = pa_simple_read(s, sp = buffer, sizeof(buffer), &error);
-            if (i < 0 && errno != EAGAIN) {
-                perror("read");
-                fprintf(stderr, "error 1\n");
-                exit(4);
-            }
-            i=sizeof(buffer);
-            if (!i)
-                break;
-            if (i > 0) {
-                if(integer_only)
+    
+    // Decoder main routine
+        fprintf(stderr, "Decoders Initialized\n");
+        switch(inputflag)
             {
-                    fbuf_cnt = i/sizeof(buffer[0]);
+            case 0:
+                fprintf(stderr, "Reading samples from audio input\n");
+            case 1:
+                fprintf(stderr, "Reading RAW samples from STDIN\n");
             }
-                else
+
+    // Loop over input
+        for (;;)
+            {
+            switch(inputflag)
                 {
-                    for (; (unsigned int) i >= sizeof(buffer[0]); i -= sizeof(buffer[0]), sp++)
-                        fbuf[fbuf_cnt++] = (*sp) * (1.0/32768.0);
-                    if (i)
-                        fprintf(stderr, "warning: noninteger number of samples read\n");
+                case 0:
+                    i = pa_simple_read(s, sp = buffer, sizeof(buffer), &error);
+                case 1:
+                    i = read(fd, sp = buffer, sizeof(buffer));
                 }
-                if (fbuf_cnt > overlap) 
+            
+            if (i < 0 && errno != EAGAIN) 
+                {
+                fprintf(stderr,"Error: PA Read Error\n");
+                exit(4);
+                }
+            if (!i)
+                {
+                fprintf(stderr,"Error: No Samples to Read\n");
+                break;
+                }
+            if (i > 0) 
+                {
+                if(integer_only)
                     {
-                    result = mdc_decoder_process_samples(m_decoder, buffer, sizeof(buffer));
+                    fbuf_cnt = i/sizeof(buffer[0]);
+                    }
+                else
+                    {
+                    
+                    for (; (unsigned int) i >= sizeof(buffer[0]); i -= sizeof(buffer[0]), sp++)
+                        fbuf[fbuf_cnt++] = (*sp) * (1.0f/32768.0f);
+                    if (i)
+                        fprintf(stderr, "Warning: noninteger number of samples read\n");
+                    }
+                if (fbuf_cnt > overlap) 
+                    
+    // Fleetsync and MDC decoding is processed and returned to the associated callbacks
+    // Returned values are irrullevent here, only -1 for errors. 
+    
+                    {
+                    f_result = fsync_decoder_process_samples(f_decoder, buffer, sizeof(buffer));
+                    m_result = mdc_decoder_process_samples(m_decoder, buffer, sizeof(buffer));
                     memmove(fbuf, fbuf+fbuf_cnt-overlap, overlap*sizeof(fbuf[0]));
                     fbuf_cnt = overlap;
-                    switch(result) 
-                        { 
-                        case 0: break; 
-                        case -1: exit(1); 
-                        case 1: 
-                            mdc_decoder_get_packet(m_decoder, &op, &arg, &unitID); 
-                            fprintf(stderr, "MDC1200: %02x %02x %04x\n", op, arg, unitID); 
-                            break; 
-                        case 2: 
-                            mdc_decoder_get_double_packet(m_decoder, &op, &arg, &unitID, &extra0, &extra1, &extra2, &extra3); 
-                            fprintf(stderr, "MDC1200: %02x %02x %04x %02x %02x %02x %02x\n", op, arg, unitID, extra0, extra1, extra2, extra3); 
-                            break; 
+                    if (f_result == -1)
+                        {
+                        fprintf(stderr,"Fleetsync Decoder Error\n");
+                        exit(1);
+                        }
+                    if (m_result == -1)
+                        {
+                        fprintf(stderr,"MDC Decoder Error\n");
+                        exit(1);
                         }
                     }
                 }
             }
-        }
-      }
-    pa_simple_free(s);
 }
 
-static void input_file(unsigned int sample_rate, unsigned int overlap, int decode_type)
-{
-    // FSYNC STUFF
-    fprintf(stderr, "\nInput Type: STDIN Raw Samples\n");
-    fsync_decoder_t *f_decoder; 
-    int result; 
-    f_decoder = fsync_decoder_new(sample_rate); 
-    fsync_decoder_set_callback(f_decoder, fsyncCallBack, 0);
-    // MDC1200 STUFF
-    mdc_decoder_t *m_decoder; 
-    unsigned char op, arg, extra0, extra1, extra2, extra3; 
-    unsigned short unitID;
-    m_decoder = mdc_decoder_new(sample_rate);  
-    //
-    int fd = 0;//STDIN
-    int i;
-    short buffer[8192];
-    float fbuf[16384];
-    unsigned int fbuf_cnt = 0;
-    short *sp;
-    switch(decode_type) {
-      case 0: // Fleetsync
-        { 
-        fprintf(stderr, "Decoder: Fleetsync\n");
-        for (;;) {
-            i = read(fd, sp = buffer, sizeof(buffer));
-            if (i < 0 && errno != EAGAIN) {
-                perror("read");
-                exit(4);
-            }
-            if (!i)
-                break;
-            if (i > 0) {
-                if(integer_only)
-            {
-                    fbuf_cnt = i/sizeof(buffer[0]);
-            }
-                else
-                {
-                    for (; (unsigned int) i >= sizeof(buffer[0]); i -= sizeof(buffer[0]), sp++)
-                        fbuf[fbuf_cnt++] = (*sp) * (1.0f/32768.0f);
-                    if (i)
-                        fprintf(stderr, "warning: noninteger number of samples read\n");
-                }
-                if (fbuf_cnt > overlap) 
-                    {
-                    result = fsync_decoder_process_samples(f_decoder, buffer, sizeof(buffer));
-                    memmove(fbuf, fbuf+fbuf_cnt-overlap, overlap*sizeof(fbuf[0]));
-                    fbuf_cnt = overlap;
-                    switch(result) 
-                        { 
-                        case 0: break; 
-                        case -1: exit(1); 
-                        } 
-                    }
-                }
-            }
-        }
-      case 1: // MDC1200
-        { 
-        fprintf(stderr, "Decoder: MDC1200\n");
-        for (;;) {
-            i = read(fd, sp = buffer, sizeof(buffer));
-            if (i < 0 && errno != EAGAIN) {
-                perror("read");
-                exit(4);
-            }
-            if (!i)
-                break;
-            if (i > 0) {
-                if(integer_only)
-            {
-                    fbuf_cnt = i/sizeof(buffer[0]);
-            }
-                else
-                {
-                    for (; (unsigned int) i >= sizeof(buffer[0]); i -= sizeof(buffer[0]), sp++)
-                        fbuf[fbuf_cnt++] = (*sp) * (1.0f/32768.0f);
-                    if (i)
-                        fprintf(stderr, "warning: noninteger number of samples read\n");
-                }
-                if (fbuf_cnt > overlap) 
-                    {
-                    result = mdc_decoder_process_samples(m_decoder, buffer, sizeof(buffer));
-                    memmove(fbuf, fbuf+fbuf_cnt-overlap, overlap*sizeof(fbuf[0]));
-                    fbuf_cnt = overlap;
-                    switch(result) 
-                        { 
-                        case 0: break; 
-                        case -1: exit(1); 
-                        case 1: 
-                            mdc_decoder_get_packet(m_decoder, &op, &arg, &unitID); 
-                            fprintf(stderr, "MDC1200: %02x %02x %04x\n", op, arg, unitID); 
-                            break; 
-                        case 2: 
-                            mdc_decoder_get_double_packet(m_decoder, &op, &arg, &unitID, &extra0, &extra1, &extra2, &extra3); 
-                            fprintf(stderr, "MDC1200: %02x %02x %04x %02x %02x %02x %02x\n", op, arg, unitID, extra0, extra1, extra2, extra3); 
-                            break; 
-                        }  
-                    }
-                }
-            }
-        }
-    }
-    close(fd);
-}
 
-int main(int argc, char *argv[])
-{
-    int sample_rate = 22050;
-    int stdin_sample_rate = 12000;
-    unsigned int overlap = 0;
-    if (argc < 2) // No flags
+
+
+int main(int argc, char *argv[]) {
+
+    fprintf(stderr, "\n\n\t              Fleetsync / MDC1200 Decoder for Linux               \n");
+    fprintf(stderr, "\t         Run with '-' flag option to use STDIN for input              \n");
+    fprintf(stderr, "\t        STDIN input MUST be RAW, MONO 8 bit unsigned integer          \n");
+    fprintf(stderr, "\t                  with a sample rate of 8000hz                       \n\n");
+    fprintf(stderr, "\t      ** NOTE ** - Proper input volume is necessary for decoding      \n");
+    fprintf(stderr, "\t                   if using system audio input                        \n");
+    fprintf(stderr, "\t----------------------------------------------------------------------\n\n");
+    fprintf(stderr, "\t  If using SDR (rtlsdr), pipe to SoX using the following settings:    \n");
+    fprintf(stderr, "\t  rtl_fm -f (freq) -s 24000 -p (ppm) -g (gain) |                      \n");
+    fprintf(stderr, "\t  sox -traw -r24000 -e signed-integer -L -b16 -c1 -V1 -v2 - -traw \\   \n");
+    fprintf(stderr, "\t  -e unsigned-integer -b8 -c1 -r8000 - highpass 200 lowpass 4000 |    \n");
+    fprintf(stderr, "\t  ./demod -                                                           \n\n\n");
+
+    // flag 0: Audio, 1: Raw via STDIN, 0 by default
+    int inputflag = 0;
+
+    // Catch wrong # of arguments
+    if (argc > 2)
         {
-        fprintf(stderr, "\n\n            Fleetsync / MDC1200 Decoder for Linux              \n");
-        fprintf(stderr, "         Run with '-' flag option to use STDIN for input           \n");
-        fprintf(stderr, "        STDIN input must be RAW, MONO 16 bit signed integer        \n");
-        fprintf(stderr, "    Default (No argument) is System Audio Input (Pulse Audio)     \n\n");
-        fprintf(stderr, "      ** NOTE ** - Proper input volume is necessary for decoding   \n");
-        fprintf(stderr, "------------------------------------------------------------------------\n");
-        fprintf(stderr, "                   Usage: ./fsync_mdc $ (-)          \n");
-        fprintf(stderr, "                   $ = 0: Decode Fleetsync           \n");
-        fprintf(stderr, "                   $ = 1: Decode MDC1200             \n");
-        fprintf(stderr, "                   '-' indicates raw input from STDIN\n\n\n");
+        fprintf(stderr, "\n Error - Improper number of arguments \n");
+
         exit(-1);
         }
-    int arg = strtol(argv[1], NULL, 10); //0 or 1, Fsync or MDC
-    if (argc < 3) // only int for decoder selection passed
-        {
-            input_sound(sample_rate, overlap, arg);
-        }
-    if (argc < 4) // only int for decoder selection passed
-        {
-        if (strcmp("-", argv[2]) == 0)
-          {
-            input_file(stdin_sample_rate, overlap, arg);
-          }
-        }
 
-
-    else
-    {
-    fprintf(stderr, "\n\n              Fleetsync / MDC1200 Decoder for Linux              \n");
-    fprintf(stderr, "         Run with '-' flag option to use STDIN for input           \n");
-    fprintf(stderr, "        STDIN input must be RAW, MONO 16 bit signed integer        \n");
-    fprintf(stderr, "    Default (No argument) is System Audio Input (Pulse Audio)     \n\n");
-    fprintf(stderr, "      ** NOTE ** - Proper input volume is necessary for decoding   \n");
-    fprintf(stderr, "------------------------------------------------------------------------\n");
-    fprintf(stderr, "                   Usage: ./demod $ (-)          \n");
-    fprintf(stderr, "                   $ = 0: Decode Fleetsync           \n");
-    fprintf(stderr, "                   $ = 1: Decode MDC1200             \n");
-    fprintf(stderr, "                   '-' indicates raw input from STDIN\n\n\n");
-    exit(-1);
-    }
-}
+    // Check arguments for "-" for raw input 
     
+    if (argc == 2)
+        {
+        if (strcmp(argv[1], "-") == 0) 
+            {inputflag = 1;}
+        }
+
+    read_input(inputflag);
+
+
+    exit(0);
+
+    
+}

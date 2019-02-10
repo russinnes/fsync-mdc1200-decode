@@ -44,12 +44,12 @@ typedef double fsync_float_t;
 typedef int fsync_int_t;
 
 /* to change the data type, set this typedef: */
-typedef short fsync_sample_t;
+typedef unsigned char fsync_sample_t;
 
 /* AND set this to match: */
-//#define FSYNC_SAMPLE_FORMAT_U8
+#define FSYNC_SAMPLE_FORMAT_U8
 //#define FSYNC_SAMPLE_FORMAT_S8
-#define FSYNC_SAMPLE_FORMAT_S16
+//#define FSYNC_SAMPLE_FORMAT_S16
 //#define FSYNC_SAMPLE_FORMAT_U16 
 //#define FSYNC_SAMPLE_FORMAT_FLOAT
 

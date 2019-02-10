@@ -47,11 +47,11 @@ typedef double mdc_float_t;
 #endif // MDC_FIXEDMATH
 
 /* to change the data type, set this typedef: */
-typedef short mdc_sample_t;
+typedef unsigned char mdc_sample_t;
 
 /* AND set this to match: */
-/* #define MDC_SAMPLE_FORMAT_U8 */
-#define MDC_SAMPLE_FORMAT_S16
+#define MDC_SAMPLE_FORMAT_U8 */
+//#define MDC_SAMPLE_FORMAT_S16
 /* #define MDC_SAMPLE_FORMAT_U16 */
 /* #define MDC_SAMPLE_FORMAT_FLOAT */
 
