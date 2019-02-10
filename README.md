@@ -24,6 +24,7 @@ System audio requires PulseAudio and SoX, raw input requires Sox at minumum for 
 will help keep noise out of the decoder, as all data is modulated below 3000Hz.
 
 to install:
+chmod a+x build.sh
 ./build.sh
 sudo apt-get install sox libpulse-dev 
 	-optional for fine advanced input control: sudo apt-get install pavucontrol (run in X as needed)
