@@ -23,21 +23,21 @@ system audio input. To read from STDIN (for instance, from rtlsdr) use the '-' f
 System audio requires PulseAudio and SoX, raw input requires Sox at minumum for bitrate conversion. Adding the HpLp filter
 will help keep noise out of the decoder, as all data is modulated below 3000Hz.
 
-to install:
-chmod a+x build.sh
-./build.sh
-sudo apt-get install sox libpulse-dev 
+	to install:
+	chmod a+x build.sh
+	./build.sh
+	sudo apt-get install sox libpulse-dev 
 	-optional for fine advanced input control: sudo apt-get install pavucontrol (run in X as needed)
 
-with rtl-sdr:
-sudo apt-get install rtl-sdr (use your google-fu if needed)
+	with rtl-sdr:
+	sudo apt-get install rtl-sdr (use your google-fu if needed)
 
-Executable:: 
-System audio: 
-	/.demod
-RTL/raw audio (uses Sox for conversion to 8 bit unsigned):
-	rtl_fm -s 24000 -g (gain) -p (ppm) -f (frequency) | sox -traw -r24000 -e signed-integer -L -b16 -c1 -V1 -v2 - \
-	-traw -e unsigned-integer -b8 -c1 -r8000 - highpass 200 lowpass 4000 | ./demod -
+	Executable:: 
+	System audio: 
+		/.demod
+	RTL/raw audio (uses Sox for conversion to 8 bit unsigned):
+		rtl_fm -s 24000 -g (gain) -p (ppm) -f (frequency) | sox -traw -r24000 -e signed-integer \
+		-L -b16 -c1 -V1 -v2 - -traw -e unsigned-integer -b8 -c1 -r8000 - highpass 200 lowpass 4000 | ./demod -
 
 
 
