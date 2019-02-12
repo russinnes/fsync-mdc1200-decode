@@ -139,8 +139,10 @@ static void read_input(int inputflag) {
             {
             case 0:
                 fprintf(stderr, "Reading samples from audio input\n");
+                break;
             case 1:
                 fprintf(stderr, "Reading RAW samples from STDIN\n");
+                break;
             }
 
     // Loop over input
