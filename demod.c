@@ -151,6 +151,7 @@ static void read_input(int inputflag) {
             if (inputflag == 0)
                 {
                     i = pa_simple_read(s, sp = buffer, sizeof(buffer), &error);
+                }
             if (inputflag ==  1)
                 {
                     i = read(fd, sp = buffer, sizeof(buffer));
