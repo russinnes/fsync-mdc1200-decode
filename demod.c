@@ -148,11 +148,11 @@ static void read_input(int inputflag) {
     // Loop over input
         for (;;)
             {
-            switch(inputflag)
+            if (inputflag == 0)
                 {
-                case 0:
                     i = pa_simple_read(s, sp = buffer, sizeof(buffer), &error);
-                case 1:
+            if (inputflag ==  1)
+                {
                     i = read(fd, sp = buffer, sizeof(buffer));
                 }
             
