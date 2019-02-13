@@ -148,13 +148,14 @@ static void read_input(int inputflag) {
     // Loop over input
         for (;;)
             {
-            if (inputflag == 0)
+            switch(inputflag)
                 {
+                case 0:
                     i = pa_simple_read(s, sp = buffer, sizeof(buffer), &error);
-                }
-            if (inputflag ==  1)
-                {
+                    break;
+                case 1:        
                     i = read(fd, sp = buffer, sizeof(buffer));
+                    break;
                 }
             
             if (i < 0 && errno != EAGAIN) 
