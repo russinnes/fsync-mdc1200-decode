@@ -104,6 +104,7 @@ static void read_input(int inputflag) {
     unsigned char *sp;
     pa_simple *s;
     pa_sample_spec ss;
+
     
     // Fleetsync
     fsync_decoder_t *f_decoder; 
@@ -152,10 +153,10 @@ static void read_input(int inputflag) {
                 {
                 case 0:
                     i = pa_simple_read(s, sp = buffer, sizeof(buffer), &error);
-                    break;
+                    
                 case 1:        
                     i = read(fd, sp = buffer, sizeof(buffer));
-                    break;
+                    
                 }
             
             if (i < 0 && errno != EAGAIN) 
