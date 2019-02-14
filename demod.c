@@ -168,7 +168,11 @@ static void read_input(int inputflag) {
                     i = read(fd, buffer, sizeof(buffer));
                 }
 
-
+                    // Magic time
+                    // Send buffer to decoders until callback fires
+                    // Only care about catching -1 for errors, other return values dont really matter here
+                    // Decoders will fire the callbacks when a message is decoded
+                    
                     f_result = fsync_decoder_process_samples(f_decoder, buffer, sizeof(buffer));
                     m_result = mdc_decoder_process_samples(m_decoder, buffer, sizeof(buffer));
                     memmove(fbuf, fbuf+fbuf_cnt-overlap, overlap*sizeof(fbuf[0]));
