@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <unistd.h>
+#include <time.h>
 
 // Network
 #include <sys/socket.h> 
@@ -23,6 +24,7 @@
 #include "mdc_decode.h"
 
 #define UDPPORT 9101
+
 
 
 void sendJsonUDP(char *message) {
@@ -52,7 +54,9 @@ void fsyncCallBack(int cmd, int subcmd, int from_fleet, int from_unit, int to_fl
                     unsigned char *raw_msg, int raw_msg_len, \
                     void *context, int is_fsync2, int is_2400){
     char json_buffer[2048];
+    printf("Timestamp: %d\n",(int)time(NULL));
     snprintf(json_buffer, sizeof(json_buffer), "{\"type\":\"FLEETSYNC\","\
+                                        "\"timestamp\":\"%d\","\
                                          "\"cmd\":\"%d\","\
                                          "\"subcmd\":\"%d\","\
                                          "\"from_fleet\":\"%d\","\
@@ -62,7 +66,7 @@ void fsyncCallBack(int cmd, int subcmd, int from_fleet, int from_unit, int to_fl
                                          "\"all_flag\":\"%d\","\
                                          "\"payload\":\"%.*s\","\
                                          "\"fsync2\":\"%d\","\
-                                         "\"2400\":\"%d\"}", cmd,subcmd,from_fleet,from_unit, \
+                                         "\"2400\":\"%d\"}", (int)time(NULL),cmd,subcmd,from_fleet,from_unit, \
                                                             to_fleet, to_unit, allflag, \
                                                             payload_len, payload, \
                                                             is_fsync2, is_2400) ;
@@ -75,13 +79,14 @@ void mdcCallBack(int numFrames, unsigned char op, unsigned char arg, unsigned sh
                   unsigned char extra3, void *context){
     char json_buffer[2048];
     snprintf(json_buffer, sizeof(json_buffer), "{\"type\":\"MDC1200\","\
+                                        "\"timestamp\":\"%d\","\
                                          "\"op\":\"%02x\","\
                                          "\"arg\":\"%02x\","\
                                          "\"unitID\":\"%04x\","\
                                          "\"ex0\":\"%02x\","\
                                          "\"ex1\":\"%02x\","\
                                          "\"ex2\":\"%02x\","\
-                                         "\"ex3\":\"%02x\"}", op, arg, unitID,extra0, \
+                                         "\"ex3\":\"%02x\"}", (int)time(NULL), op, arg, unitID,extra0, \
                                          extra1, extra2, extra3);
                                          
     fprintf(stdout, "%s\n", json_buffer);
@@ -148,47 +153,22 @@ static void read_input(int inputflag) {
 
     // Loop over input
         for (;;)
-            {
-            switch(inputflag)
+            {            
+            if (inputflag == 0)
                 {
-                case 0:
-                    i = pa_simple_read(s, sp = buffer, sizeof(buffer), &error);
-                    
-                case 1:        
-                    i = read(fd, sp = buffer, sizeof(buffer));
-                    
+                    if (pa_simple_read(s, buffer, sizeof(buffer), &error) < 0) 
+                        {
+                        fprintf(stderr, __FILE__": read() failed: %s\n", strerror(errno));
+                        exit(4);
+                        }
                 }
-            
-            if (i < 0 && errno != EAGAIN) 
-                {
-                fprintf(stderr,"Error: PA Read Error\n");
-                exit(4);
+                        
+            else   
+                {     
+                    i = read(fd, buffer, sizeof(buffer));
                 }
-            if (!i)
-                {
-                fprintf(stderr,"Error: No Samples to Read\n");
-                break;
-                }
-            if (i > 0) 
-                {
-                if(integer_only)
-                    {
-                    fbuf_cnt = i/sizeof(buffer[0]);
-                    }
-                else
-                    {
-                    
-                    for (; (unsigned int) i >= sizeof(buffer[0]); i -= sizeof(buffer[0]), sp++)
-                        fbuf[fbuf_cnt++] = (*sp) * (1.0f/32768.0f);
-                    if (i)
-                        fprintf(stderr, "Warning: noninteger number of samples read\n");
-                    }
-                if (fbuf_cnt > overlap) 
-                    
-    // Fleetsync and MDC decoding is processed and returned to the associated callbacks
-    // Returned values are irrullevent here, only -1 for errors. 
-    
-                    {
+
+
                     f_result = fsync_decoder_process_samples(f_decoder, buffer, sizeof(buffer));
                     m_result = mdc_decoder_process_samples(m_decoder, buffer, sizeof(buffer));
                     memmove(fbuf, fbuf+fbuf_cnt-overlap, overlap*sizeof(fbuf[0]));
@@ -203,10 +183,10 @@ static void read_input(int inputflag) {
                         fprintf(stderr,"MDC Decoder Error\n");
                         exit(1);
                         }
-                    }
-                }
+                    
             }
 }
+
 
 
 
@@ -252,3 +232,4 @@ int main(int argc, char *argv[]) {
 
     
 }
+
