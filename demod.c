@@ -98,8 +98,8 @@ static void read_input(int inputflag) {
 
     // General
     int sample_rate = 8000;
-    unsigned char buffer[2048];
-    float fbuf[8192];
+    unsigned char buffer[4096];
+    float fbuf[16384];
     unsigned int fbuf_cnt = 0;
     int i;
     int error;
