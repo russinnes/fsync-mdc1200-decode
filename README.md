@@ -20,8 +20,17 @@ output is to STDERR.
 Once compiled using ./build.sh, execute the ./demod executable to start the program. Default source uses
 system audio input. To read from STDIN (for instance, from rtlsdr) use the '-' flag (./demod -)
 
-System audio requires PulseAudio and SoX, raw input requires Sox at minumum for bitrate conversion. Adding the HpLp filter
-will help keep noise out of the decoder, as all data is modulated below 3000Hz.
+System input audio can be used numerous ways. The decoder will direct sample an audio input connected to a reciever, and gives good results. Another approach is to use existing system audio tools, and SoX, to provide better audio sample capture and filtering/processing. This approach pipes raw packets already processed into the decoder as follows:
+
+	Ex 1: Direct: 
+		./demod         This does all audio processing internally and works well.
+	
+	Ex 2: External Processing using arecord and Sox:
+		arecord -r 24000 -t raw -f S16_LE | sox -traw -r24000 -e signed-integer \
+		-L -b16 -c1 -V1 -v2 - -traw -e unsigned-integer -b8 -c1 -r8000 - highpass 200 lowpass 4000 | ./demod -
+
+
+Remember, audio input level will need to be adjusted for best results. Alsamixer and/or pavucontrol can help with this. 
 
 	to install:
 	chmod a+x build.sh
@@ -33,7 +42,7 @@ will help keep noise out of the decoder, as all data is modulated below 3000Hz.
 	sudo apt-get install rtl-sdr (use your google-fu if needed)
 
 	Executable:: 
-	System audio: 
+	System audio examples noted above: 
 		/.demod
 	RTL/raw audio (uses Sox for conversion to 8 bit unsigned):
 		rtl_fm -s 24000 -g (gain) -p (ppm) -f (frequency) | sox -traw -r24000 -e signed-integer \
